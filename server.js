@@ -26,8 +26,15 @@ function readJson(file, fallback) {
 }
 
 function writeJson(file, data) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, JSON.stringify(data, null, 2), "utf8");
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify(data, null, 2), "utf8");
+    return true;
+  } catch (error) {
+    // Vercel/serverless filesystems are often read-only
+    console.warn("Local write skipped:", error.message);
+    return false;
+  }
 }
 
 function sanitize(text, max = 2000) {
@@ -116,17 +123,24 @@ async function githubSaveReviews(reviews, sha) {
 }
 
 async function loadReviews() {
-  const remote = await githubGetReviews();
-  if (remote && Array.isArray(remote.reviews)) {
-    writeJson(REVIEWS_FILE, remote.reviews);
-    return { reviews: remote.reviews, sha: remote.sha };
+  try {
+    const remote = await githubGetReviews();
+    if (remote && Array.isArray(remote.reviews)) {
+      writeJson(REVIEWS_FILE, remote.reviews);
+      return { reviews: remote.reviews, sha: remote.sha };
+    }
+  } catch (error) {
+    console.warn("Remote reviews load failed:", error.message);
   }
-  return { reviews: readJson(REVIEWS_FILE, []), sha: remote?.sha };
+  return { reviews: readJson(REVIEWS_FILE, []), sha: undefined };
 }
 
 async function saveReviews(reviews, sha) {
   writeJson(REVIEWS_FILE, reviews);
-  await githubSaveReviews(reviews, sha);
+  const saved = await githubSaveReviews(reviews, sha);
+  if (!saved && GITHUB_TOKEN && GITHUB_REPO) {
+    throw new Error("Failed to persist reviews remotely");
+  }
 }
 
 app.get("/api/admins", async (_req, res) => {
@@ -214,6 +228,10 @@ app.get("*", (_req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`STAR site running at http://localhost:${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`STAR site running at http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;
