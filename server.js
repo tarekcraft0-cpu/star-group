@@ -138,7 +138,8 @@ async function loadReviews() {
 async function saveReviews(reviews, sha) {
   writeJson(REVIEWS_FILE, reviews);
   const saved = await githubSaveReviews(reviews, sha);
-  if (!saved && GITHUB_TOKEN && GITHUB_REPO) {
+  if (!saved) {
+    // On cloud hosts local disk is ephemeral, so remote save is required.
     throw new Error("Failed to persist reviews remotely");
   }
 }
