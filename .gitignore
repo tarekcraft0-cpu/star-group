@@ -1,0 +1,10 @@
+node_modules/
+.DS_Store
+Thumbs.db
+.env
+.env.*
+!.env.example
+npm-debug.log*
+.vscode/
+.idea/
+public/assets/_probe/
